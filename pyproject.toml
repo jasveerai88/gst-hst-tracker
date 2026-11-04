@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gst-hst-tracker"
+version = "1.0.0"
+description = "Track GST/HST for Canadian freelancers and sole proprietors: per-quarter collected, ITCs and net owing, the $30,000 small-supplier alarm, and a per-province exposure view. A tracking aid — not tax advice."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Jasveer Singh" },
+]
+keywords = [
+    "gst",
+    "hst",
+    "canada",
+    "tax",
+    "freelancer",
+    "bookkeeping",
+    "cli",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Accounting",
+    "Topic :: Utilities",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jasveerai88/gst-hst-tracker"
+Repository = "https://github.com/jasveerai88/gst-hst-tracker"
+Issues = "https://github.com/jasveerai88/gst-hst-tracker/issues"
+
+[project.scripts]
+gst-hst-tracker = "gst_hst_tracker:main"
+
+# The implementation is a single standard-library module in
+# src/; it is installed as the top-level module
+# `gst_hst_tracker`, and `python3 src/gst_hst_tracker.py`
+# keeps working from a checkout.
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["gst_hst_tracker"]

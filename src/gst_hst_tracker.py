@@ -117,7 +117,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 TOOL = "gst-hst-tracker"
 RATES_AS_OF = "2026-11"
 DEFAULT_LIMIT = 30000.0

@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.0.0 — 2026-11-04
+
+The professional release: same tracker, launch-grade packaging.
+**No behaviour changes** — every number v0.2.0 computed, v1.0.0
+computes identically (the full 77-test suite passes unmodified
+except the version string).
+
+- **Installable package.** `pyproject.toml` with the console
+  entry point `gst-hst-tracker`; install from GitHub:
+  `pipx install git+https://github.com/jasveerai88/gst-hst-tracker`.
+  Running the module from a checkout
+  (`python3 src/gst_hst_tracker.py ...`) keeps working.
+- **Landing-page README** with a demo built from real runs, the
+  honest limits stated before the reference material, and a
+  sourced fact table: every tax fact the project states (the
+  $30,000 threshold and its single-quarter rule, the 29-day
+  registration window, place of supply, tax held in trust, the
+  encoded rate table) carries its CRA source and a 2026-11-04
+  check date. Specific filing due dates are deliberately not
+  stated — they depend on the filer's reporting period.
+- **SECURITY.md and GitHub issue templates** added; SKILL.md
+  updated to the installed command.
+
 ## v0.2.0 — 2026-11-04
 
 The provincial view (the "Province Tax Watch" fold).

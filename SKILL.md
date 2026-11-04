@@ -51,29 +51,39 @@ Do NOT use when:
   latest transaction, so a stale ledger gives a stale window.
   Say so if the dates look old.
 
+## Install
+
+```bash
+pipx install git+https://github.com/jasveerai88/gst-hst-tracker
+# or: pip install git+https://github.com/jasveerai88/gst-hst-tracker
+```
+
+(Not on PyPI — the git+ form is the install.) From a source
+checkout, `python3 src/gst_hst_tracker.py ...` is equivalent.
+
 ## Commands
 
 ```bash
 # Quarterly report (JSON or CSV input; exit 0 on success)
-python3 src/gst_hst_tracker.py report LEDGER.json
-python3 src/gst_hst_tracker.py report LEDGER.csv --json
+gst-hst-tracker report LEDGER.json
+gst-hst-tracker report LEDGER.csv --json
 
 # One calendar quarter or one year only
-python3 src/gst_hst_tracker.py report LEDGER.json --period 2026-Q1
-python3 src/gst_hst_tracker.py report LEDGER.json --period 2026
+gst-hst-tracker report LEDGER.json --period 2026-Q1
+gst-hst-tracker report LEDGER.json --period 2026
 
 # The small-supplier alarm (exit 1 when crossed, 0 otherwise)
-python3 src/gst_hst_tracker.py threshold LEDGER.json [--limit 30000]
+gst-hst-tracker threshold LEDGER.json [--limit 30000]
 
 # The provincial view (exit 0 on success)
-python3 src/gst_hst_tracker.py provinces LEDGER.json
-python3 src/gst_hst_tracker.py provinces LEDGER.json --period 2026-Q1 --json
+gst-hst-tracker provinces LEDGER.json
+gst-hst-tracker provinces LEDGER.json --period 2026-Q1 --json
 
 # Also display INR equivalents (rate per 1 CAD)
-python3 src/gst_hst_tracker.py report LEDGER.json --cad-to-inr 67.97
+gst-hst-tracker report LEDGER.json --cad-to-inr 67.97
 
 # Override a province rate when it changes
-python3 src/gst_hst_tracker.py report LEDGER.json --rate NS=15
+gst-hst-tracker report LEDGER.json --rate NS=15
 ```
 
 Input rows (JSON list, `{"transactions": [...]}` object, or CSV

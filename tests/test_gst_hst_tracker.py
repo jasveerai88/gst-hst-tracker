@@ -401,7 +401,7 @@ class TestCli(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         obj = json.loads(p.stdout)
         self.assertEqual(obj["tool"], "gst-hst-tracker")
-        self.assertEqual(obj["version"], "0.2.0")
+        self.assertEqual(obj["version"], "1.0.0")
         self.assertEqual(obj["currency"], "CAD")
         self.assertAlmostEqual(obj["totals"]["net_tax_owing"], 866.00)
         self.assertEqual(obj["totals"]["t2125"]
@@ -718,7 +718,7 @@ class TestProvincesCli(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         obj = json.loads(p.stdout)
         self.assertEqual(obj["command"], "provinces")
-        self.assertEqual(obj["version"], "0.2.0")
+        self.assertEqual(obj["version"], "1.0.0")
         self.assertEqual(obj["provincial_rates"]["stamp"],
                          gst.PROVINCIAL_RATES_STAMP)
         self.assertEqual(

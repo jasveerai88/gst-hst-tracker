@@ -3,3 +3,8 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+dist/
+build/
+*.egg-info/
+launch/
+.muse-github-snapshot-sync.json
