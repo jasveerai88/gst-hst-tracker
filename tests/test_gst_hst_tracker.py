@@ -401,7 +401,7 @@ class TestCli(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         obj = json.loads(p.stdout)
         self.assertEqual(obj["tool"], "gst-hst-tracker")
-        self.assertEqual(obj["version"], "0.1.0")
+        self.assertEqual(obj["version"], "0.2.0")
         self.assertEqual(obj["currency"], "CAD")
         self.assertAlmostEqual(obj["totals"]["net_tax_owing"], 866.00)
         self.assertEqual(obj["totals"]["t2125"]
@@ -525,6 +525,272 @@ class TestCli(unittest.TestCase):
         self.assertEqual(p.returncode, 2)
         self.assertIn("ERROR", p.stdout)
 
+
+
+class TestProvincesMath(unittest.TestCase):
+    """The v0.2.0 provincial view, hand-worked from the encoded
+    rates (HST ON 13% / NS 14% / NB-NL-PE 15%, GST 5%, QST
+    9.975%, BC PST 7%, SK PST 6%, MB RST 7%) — not copied from
+    the tool's own output."""
+
+    def _by_prov(self, rows, rates=RATES, period=None):
+        blocks, totals = gst.compute_provinces(rows, rates, period)
+        return {b["province"]: b for b in blocks}, totals
+
+    def test_main_sample_by_province(self):
+        # ON: income 4000 + 1000 zero-rated = 5000; collected
+        # 520 + 0 = 520; expenses 300, ITCs 26 + 13 = 39; net 481.
+        # BC: 1500 @5% = 75; PST estimate 7% x 1500 = 105.
+        # NS: 2500 @14% = 350. AB: expense 800, tax 40 given ->
+        # ITCs 40, net -40. Totals equal the report's totals:
+        # collected 945, ITCs 79, net 866.
+        rows = gst.load_rows(EXAMPLES / "sample.json")
+        by, totals = self._by_prov(rows)
+        self.assertEqual(by["ON"]["tax_system"], "HST 13%")
+        self.assertAlmostEqual(by["ON"]["gst_hst_collected"], 520.00)
+        self.assertAlmostEqual(by["ON"]["itcs"], 39.00)
+        self.assertAlmostEqual(by["ON"]["net_tax_owing"], 481.00)
+        self.assertIsNone(by["ON"]["provincial"])
+        self.assertEqual(by["BC"]["tax_system"], "GST 5% + PST 7%")
+        self.assertAlmostEqual(
+            by["BC"]["provincial"]["estimated_on_sales"], 105.00)
+        self.assertAlmostEqual(by["NS"]["gst_hst_collected"], 350.00)
+        self.assertEqual(by["NS"]["tax_system"], "HST 14%")
+        self.assertAlmostEqual(by["AB"]["net_tax_owing"], -40.00)
+        self.assertAlmostEqual(totals["gst_hst_collected"], 945.00)
+        self.assertAlmostEqual(totals["itcs"], 79.00)
+        self.assertAlmostEqual(totals["net_tax_owing"], 866.00)
+        self.assertAlmostEqual(
+            totals["provincial_estimated_on_sales"], 105.00)
+
+    def test_provinces_sample_by_hand(self):
+        # provinces-sample.json, worked by hand:
+        # ON 10000 @13% = 1300; expense 2000 -> ITC 260; net 1040.
+        # QC income 8000 (qst 798 recorded) + 2000 (no qst) ->
+        # GST collected 500; expense 1000 (qst 99.75) -> GST ITC
+        # 50; net GST 450. QST recorded 798.00 / 99.75 / net
+        # 698.25; QST estimate on the unrecorded 2000 = 199.50.
+        # BC 6000 -> GST 300; expense 500 -> 25; net 275; PST 420.
+        # AB 4000 -> 200; expense 1000 -> 50; net 150.
+        # SK 3000 -> 150; PST 6% = 180.
+        # Totals: income 33000, collected 2450, ITCs 385, net
+        # 2065, estimates 199.50 + 420 + 180 = 799.50.
+        rows = gst.load_rows(EXAMPLES / "provinces-sample.json")
+        by, totals = self._by_prov(rows)
+        self.assertAlmostEqual(by["ON"]["gst_hst_collected"], 1300.00)
+        self.assertAlmostEqual(by["ON"]["net_tax_owing"], 1040.00)
+        qc = by["QC"]
+        self.assertEqual(qc["tax_system"], "GST 5% + QST 9.975%")
+        self.assertAlmostEqual(qc["gst_hst_collected"], 500.00)
+        self.assertAlmostEqual(qc["net_tax_owing"], 450.00)
+        self.assertAlmostEqual(
+            qc["provincial"]["recorded_collected"], 798.00)
+        self.assertAlmostEqual(qc["provincial"]["recorded_paid"],
+                               99.75)
+        self.assertAlmostEqual(qc["provincial"]["recorded_net"],
+                               698.25)
+        self.assertAlmostEqual(qc["provincial"]["estimate_base"],
+                               2000.00)
+        self.assertAlmostEqual(
+            qc["provincial"]["estimated_on_sales"], 199.50)
+        self.assertAlmostEqual(by["BC"]["net_tax_owing"], 275.00)
+        self.assertAlmostEqual(
+            by["BC"]["provincial"]["estimated_on_sales"], 420.00)
+        self.assertAlmostEqual(by["AB"]["net_tax_owing"], 150.00)
+        self.assertIsNone(by["AB"]["provincial"])
+        self.assertAlmostEqual(
+            by["SK"]["provincial"]["estimated_on_sales"], 180.00)
+        self.assertAlmostEqual(totals["income_total"], 33000.00)
+        self.assertAlmostEqual(totals["gst_hst_collected"], 2450.00)
+        self.assertAlmostEqual(totals["itcs"], 385.00)
+        self.assertAlmostEqual(totals["net_tax_owing"], 2065.00)
+        self.assertAlmostEqual(totals["qst_recorded_net"], 698.25)
+        self.assertAlmostEqual(
+            totals["provincial_estimated_on_sales"], 799.50)
+
+    def test_each_tax_treatment_to_the_cent(self):
+        cases = [
+            # province, amount, collected, label, prov name, est
+            ("ON", 100.0, 13.00, "HST 13%", None, None),
+            ("NS", 100.0, 14.00, "HST 14%", None, None),
+            ("NB", 100.0, 15.00, "HST 15%", None, None),
+            ("PE", 100.0, 15.00, "HST 15%", None, None),
+            ("NL", 100.0, 15.00, "HST 15%", None, None),
+            ("AB", 100.0, 5.00, "GST 5%", None, None),
+            ("YT", 100.0, 5.00, "GST 5%", None, None),
+            ("NT", 100.0, 5.00, "GST 5%", None, None),
+            ("BC", 100.0, 5.00, "GST 5% + PST 7%", "PST", 7.00),
+            ("SK", 100.0, 5.00, "GST 5% + PST 6%", "PST", 6.00),
+            ("MB", 100.0, 5.00, "GST 5% + RST 7%", "RST", 7.00),
+            ("QC", 1000.0, 50.00, "GST 5% + QST 9.975%", "QST",
+             99.75),
+        ]
+        for prov, amount, collected, label, pname, est in cases:
+            rows = [txn(amount=amount, province=prov)]
+            by, _ = self._by_prov(rows)
+            b = by[prov]
+            self.assertEqual(b["tax_system"], label, msg=prov)
+            self.assertAlmostEqual(b["gst_hst_collected"],
+                                   collected, msg=prov)
+            if pname is None:
+                self.assertIsNone(b["provincial"], msg=prov)
+            else:
+                self.assertEqual(b["provincial"]["name"], pname,
+                                 msg=prov)
+                self.assertAlmostEqual(
+                    b["provincial"]["estimated_on_sales"], est,
+                    msg=prov)
+
+    def test_qc_recorded_qst_replaces_estimate(self):
+        rows = [txn(amount=1000.0, province="QC", qst=99.75)]
+        by, _ = self._by_prov(rows)
+        comp = by["QC"]["provincial"]
+        self.assertAlmostEqual(comp["recorded_collected"], 99.75)
+        self.assertAlmostEqual(comp["estimate_base"], 0.0)
+        self.assertAlmostEqual(comp["estimated_on_sales"], 0.0)
+
+    def test_qc_recorded_zero_qst_stays_out_of_estimate(self):
+        # qst: 0 records a zero-rated sale — no estimate either
+        rows = [txn(amount=1000.0, province="QC", qst=0.0)]
+        by, _ = self._by_prov(rows)
+        comp = by["QC"]["provincial"]
+        self.assertAlmostEqual(comp["recorded_collected"], 0.0)
+        self.assertAlmostEqual(comp["estimated_on_sales"], 0.0)
+
+    def test_qst_never_enters_provincial_net(self):
+        rows = [txn(amount=1000.0, province="QC", qst=99.75),
+                txn(kind="expense", amount=200.0, province="QC",
+                    qst=19.95)]
+        by, _ = self._by_prov(rows)
+        # net is GST only: 50 - 10 = 40, exactly as in report
+        self.assertAlmostEqual(by["QC"]["net_tax_owing"], 40.00)
+
+    def test_rounding_is_per_province_then_summed(self):
+        # The stated rounding rule: ON 333.33 @13% = 43.3329 ->
+        # 43.33; NB 222.22 @15% = 33.333 -> 33.33; the total is
+        # 43.33 + 33.33 = 76.66 (sum of the rounded figures),
+        # NOT round(43.3329 + 33.333) = 76.67.
+        rows = [txn(amount=333.33, province="ON"),
+                txn(amount=222.22, province="NB")]
+        by, totals = self._by_prov(rows)
+        self.assertAlmostEqual(by["ON"]["gst_hst_collected"], 43.33)
+        self.assertAlmostEqual(by["NB"]["gst_hst_collected"], 33.33)
+        self.assertAlmostEqual(totals["gst_hst_collected"], 76.66)
+
+    def test_provinces_period_filter(self):
+        rows = gst.load_rows(EXAMPLES / "provinces-sample.json")
+        by, totals = self._by_prov(
+            rows, period=gst.parse_period("2026-Q1"))
+        # Q1 holds the ON, QC and BC rows; AB (Apr) and SK (May)
+        # are Q2. Q1 income: 10000 + 10000 + 6000 = 26000.
+        self.assertEqual(sorted(by), ["BC", "ON", "QC"])
+        self.assertAlmostEqual(totals["income_total"], 26000.00)
+
+    def test_provinces_period_with_no_data_is_clean_error(self):
+        rows = gst.load_rows(EXAMPLES / "sample.json")
+        with self.assertRaises(gst.ToolError) as ctx:
+            gst.compute_provinces(rows, RATES,
+                                  gst.parse_period("2027-Q1"))
+        self.assertIn("no transactions in period", str(ctx.exception))
+
+    def test_provinces_csv_json_agree(self):
+        a = gst.load_rows(EXAMPLES / "provinces-sample.json")
+        b = gst.load_rows(EXAMPLES / "provinces-sample.csv")
+        blocks_a, totals_a = gst.compute_provinces(a, RATES)
+        blocks_b, totals_b = gst.compute_provinces(b, RATES)
+        self.assertEqual(blocks_a, blocks_b)
+        self.assertEqual(totals_a, totals_b)
+
+
+class TestProvincesCli(unittest.TestCase):
+    def test_provinces_sample_exit_0(self):
+        p = run_cli("provinces", str(EXAMPLES / "sample.json"))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("ON — HST 13%", p.stdout)
+        self.assertIn("Encoded rates, checked 2026-11", p.stdout)
+        self.assertIn("NET GST/HST: 866.00", p.stdout)
+        self.assertIn("Disclaimer:", p.stdout)
+        self.assertNotIn("Traceback", p.stderr)
+
+    def test_provinces_json_mode(self):
+        p = run_cli("provinces",
+                    str(EXAMPLES / "provinces-sample.json"), "--json")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        obj = json.loads(p.stdout)
+        self.assertEqual(obj["command"], "provinces")
+        self.assertEqual(obj["version"], "0.2.0")
+        self.assertEqual(obj["provincial_rates"]["stamp"],
+                         gst.PROVINCIAL_RATES_STAMP)
+        self.assertEqual(
+            obj["provincial_rates"]["taxes"]["QC"]
+            ["provincial_tax"], {"name": "QST", "rate_pct": 9.975})
+        by = {b["province"]: b for b in obj["provinces"]}
+        self.assertAlmostEqual(
+            by["QC"]["provincial"]["recorded_net"], 698.25)
+        self.assertAlmostEqual(
+            by["QC"]["provincial"]["estimated_on_sales"], 199.50)
+        self.assertAlmostEqual(
+            by["BC"]["provincial"]["estimated_on_sales"], 420.00)
+        self.assertIsNone(by["ON"]["provincial"])
+        self.assertAlmostEqual(obj["totals"]["net_tax_owing"],
+                               2065.00)
+        self.assertAlmostEqual(
+            obj["totals"]["provincial_estimated_on_sales"], 799.50)
+        self.assertIn("not tax advice", obj["disclaimer"])
+
+    def test_provinces_json_and_text_agree(self):
+        text = run_cli("provinces",
+                       str(EXAMPLES / "provinces-sample.json"))
+        js = run_cli("provinces",
+                     str(EXAMPLES / "provinces-sample.json"),
+                     "--json")
+        self.assertEqual(text.returncode, js.returncode)
+        obj = json.loads(js.stdout)
+        self.assertIn(f"{obj['totals']['net_tax_owing']:,.2f}",
+                      text.stdout)
+
+    def test_provinces_missing_province_is_clean_error(self):
+        # a row with no province at all: never guessed (not the
+        # home province, not GST-only) — a clean error, row named
+        path = write_tmp(json.dumps(
+            [{"date": "2026-01-15", "kind": "income",
+              "description": "Work", "amount": 100.0}]), ".json")
+        p = run_cli("provinces", path)
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("row 1", p.stdout)
+        self.assertIn("'province'", p.stdout)
+        self.assertNotIn("Traceback", p.stderr)
+
+    def test_provinces_unknown_province_is_clean_error(self):
+        path = write_tmp(json.dumps([raw(province="XX")]), ".json")
+        p = run_cli("provinces", path, "--json")
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("row 1", json.loads(p.stdout)["error"])
+
+    def test_provinces_rate_override(self):
+        # NS at the old 15%: sample NS collected 350 -> 375, and
+        # the system label follows the effective rate
+        p = run_cli("provinces", str(EXAMPLES / "sample.json"),
+                    "--rate", "NS=15", "--json")
+        obj = json.loads(p.stdout)
+        by = {b["province"]: b for b in obj["provinces"]}
+        self.assertAlmostEqual(by["NS"]["gst_hst_collected"], 375.00)
+        self.assertEqual(by["NS"]["tax_system"], "HST 15%")
+
+    def test_provinces_period_flag(self):
+        p = run_cli("provinces",
+                    str(EXAMPLES / "provinces-sample.json"),
+                    "--period", "2026-Q2")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("AB — GST 5%", p.stdout)
+        self.assertNotIn("QC —", p.stdout)
+
+    def test_provinces_cad_to_inr(self):
+        p = run_cli("provinces", str(EXAMPLES / "sample.json"),
+                    "--cad-to-inr", "67.97", "--json")
+        obj = json.loads(p.stdout)
+        self.assertAlmostEqual(obj["totals"]["net_tax_owing_inr"],
+                               round(866.00 * 67.97, 2), places=1)
 
 if __name__ == "__main__":
     unittest.main()

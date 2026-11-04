@@ -1,6 +1,6 @@
 ---
 name: gst-hst-tracker
-description: Track GST/HST for Canadian freelancers and sole proprietors from a JSON/CSV ledger — per-calendar-quarter GST/HST collected, ITCs, and net tax owing (collected − ITCs) with a T2125-style prep section, plus the small-supplier alarm: rolling last-4-calendar-quarters taxable income vs the $30,000 registration threshold with exact headroom. Use when preparing GST/HST figures, checking ITCs, or monitoring the registration threshold. A tracking aid, NOT tax advice and NOT a CRA filing; rates are Nov-2026 defaults, overridable — never present them as live fact.
+description: Track GST/HST for Canadian freelancers and sole proprietors from a JSON/CSV ledger — per-calendar-quarter GST/HST collected, ITCs, and net tax owing (collected − ITCs) with a T2125-style prep section, the small-supplier alarm (rolling last-4-calendar-quarters taxable income vs the $30,000 registration threshold with exact headroom), and a per-province view (tax system, collected, ITCs, net per province; recorded QST memo figures; PST/RST exposure estimates). Use when preparing GST/HST figures, checking ITCs, monitoring the registration threshold, or seeing place-of-supply exposure province by province. A tracking aid, NOT tax advice and NOT a CRA filing; rates are Nov-2026 defaults, overridable — never present them as live fact.
 ---
 
 # gst-hst-tracker — agent skill
@@ -11,9 +11,14 @@ Canadian freelancers and sole proprietors track GST/HST in
 spreadsheets and discover CRA's $30,000 small-supplier threshold
 after crossing it. This tool reads a dated transaction ledger and
 produces (a) per-quarter GST/HST collected, ITCs and net tax
-owing with a T2125-style income/expense prep section, and (b) the
+owing with a T2125-style income/expense prep section, (b) the
 threshold test: rolling last-4-calendar-quarters taxable income
-against the $30,000 limit, with headroom or a crossed alarm.
+against the $30,000 limit, with headroom or a crossed alarm, and
+(c) a per-province view of the same ledger: tax system,
+collected, ITCs and net per province, with the provincial
+component shown only as far as the data supports it (recorded
+QST as memo figures plus an estimate on unrecorded QC sales;
+PST/RST as rate×sales exposure estimates).
 Pure Python standard library; local only; reads one ledger file,
 writes nothing.
 
@@ -39,7 +44,9 @@ Do NOT use when:
   or a qualified accountant.
 - The question involves penalties or interest — never computed.
 - The books are Quebec QST books: QST is memo-only here (see
-  Limits). BC PST / SK PST / MB RST are out of scope entirely.
+  Limits). BC PST / SK PST / MB RST appear only as exposure
+  estimates in the `provinces` view — never as taxes owed or
+  credits.
 - The ledger is stale: the threshold window is anchored to the
   latest transaction, so a stale ledger gives a stale window.
   Say so if the dates look old.
@@ -57,6 +64,10 @@ python3 src/gst_hst_tracker.py report LEDGER.json --period 2026
 
 # The small-supplier alarm (exit 1 when crossed, 0 otherwise)
 python3 src/gst_hst_tracker.py threshold LEDGER.json [--limit 30000]
+
+# The provincial view (exit 0 on success)
+python3 src/gst_hst_tracker.py provinces LEDGER.json
+python3 src/gst_hst_tracker.py provinces LEDGER.json --period 2026-Q1 --json
 
 # Also display INR equivalents (rate per 1 CAD)
 python3 src/gst_hst_tracker.py report LEDGER.json --cad-to-inr 67.97
@@ -88,6 +99,18 @@ the net), `category` (expenses only; T2125-style grouping).
   15% on 2025-04-01), QC = GST 5% federal part only.
 - QST (9.975%) is a separate Revenu Québec tax: supplied `qst`
   amounts appear as memo totals only and never enter the net.
+- Provincial view (`provinces`): the same federal math grouped
+  by the row's province. Encoded provincial taxes, stamped
+  "Encoded rates, checked 2026-11 — verify against
+  CRA/provincial sources before filing": QST 9.975% (QC), PST
+  7% (BC), PST 6% (SK), RST 7% (MB); HST provinces have no
+  separate provincial component. QC shows recorded QST totals
+  plus an estimate on QC income rows with no recorded `qst`;
+  BC/SK/MB show a rate×sales exposure estimate only, and no
+  provincial ITC (PST/RST on inputs is generally a cost).
+  Rounding: per-province figures are rounded to cents and the
+  summary sums those rounded figures, so it always reconciles
+  with the province blocks.
 
 ## Output JSON schema (`--json`)
 
@@ -112,6 +135,21 @@ entries, oldest first), `rolling_total`, `limit`, `headroom`
 (bool), `status` (`"under"` | `"at"` | `"crossed"`), `rule`,
 `disclaimer`.
 
+`provinces`: the common fields plus `provincial_rates`
+(`stamp`, `qst_rate_pct`, `taxes` — per-province `federal`
+label and `provincial_tax` `{name, rate_pct}` or null),
+`rounding_rule`, `provinces`, `totals`, `disclaimer`. Each
+entry in `provinces`: `province`, `tax_system` (built from the
+effective rates, e.g. `"GST 5% + PST 7%"`), `income_total`,
+`expense_total`, `gst_hst_collected`, `itcs`, `net_tax_owing`,
+`transactions`, and `provincial` — null for GST-only and HST
+provinces; otherwise `{name, rate_pct, recorded_collected,
+recorded_paid, recorded_net}` (numbers for QC, null for
+BC/SK/MB — nothing is recorded for those), `estimate_base`,
+`estimated_on_sales`, `note`. `totals` adds
+`qst_recorded_collected` / `qst_recorded_paid` /
+`qst_recorded_net` and `provincial_estimated_on_sales`.
+
 On error, stdout is a single object: `{"error": "<message>"}`
 (validation errors name the row: `"row 2: ..."`) with exit code
 2 — including argparse usage errors in `--json` mode. Never
@@ -120,6 +158,9 @@ plain text, never a traceback.
 ## Exit codes
 
 - `report`: `0` — report computed. `2` — error.
+- `provinces`: `0` — view computed. `2` — error. (No exit-1
+  state: the view is informational; the alarm lives in
+  `threshold`.)
 - `threshold`: `0` — rolling total is under **or exactly at**
   the limit: still a small supplier on these figures. `1` —
   **THRESHOLD CROSSED**: the rolling total exceeds the limit
@@ -149,6 +190,14 @@ plain text, never a traceback.
 - **QST never enters the net.** If you summarize Quebec rows,
   keep QST as a separate memo figure. Do not add QST collected
   to `net_tax_owing`, and do not treat QST paid as an ITC.
+- **Provincial estimates are estimates.** The `provinces`
+  view's PST/RST figures and the QST figure on unrecorded
+  Quebec sales are rate×sales estimates from the encoded
+  table — never present them as amounts collected, owed, or
+  filed, and always carry the encoded-rates stamp ("checked
+  2026-11 — verify against CRA/provincial sources before
+  filing") when you quote the rates. PST/RST paid on inputs is
+  never an ITC in this tool.
 - **A negative net is a refund position, not income.** Do not
   describe it as money received.
 - **Penalties and interest are never computed** — if the user

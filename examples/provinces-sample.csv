@@ -1,0 +1,11 @@
+date,kind,description,amount,province,tax,qst,category
+2026-01-12,income,Platform build — Toronto client,10000.00,ON,,
+2026-02-03,expense,Subcontractor — Ontario,2000.00,ON,,
+2026-01-20,income,Site bilingue — Client Montréal,8000.00,QC,,798.00,
+2026-03-11,income,Maintenance — Client Québec,2000.00,QC,,
+2026-02-18,expense,Hébergement et outils,1000.00,QC,,99.75,
+2026-03-02,income,Brand package — Vancouver client,6000.00,BC,,
+2026-03-19,expense,Print run,500.00,BC,,
+2026-04-08,income,Consulting — Calgary client,4000.00,AB,,
+2026-04-22,expense,Software subscriptions,1000.00,AB,,
+2026-05-06,income,Training — Regina client,3000.00,SK,,

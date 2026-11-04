@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.2.0 — 2026-11-04
+
+The provincial view (the "Province Tax Watch" fold).
+
+- **`provinces FILE.json|FILE.csv`** — the same ledger grouped
+  by province instead of by quarter: for each province present,
+  the tax system that applies (GST only / HST at the province's
+  rate / GST + QST / GST + PST or RST), income and expense
+  totals, GST/HST collected, ITCs and net per province, plus an
+  all-provinces summary that reconciles exactly with the
+  `report` totals. Supports `--period`, `--rate`, `--cad-to-inr`
+  and `--json`; exit 0 on success, 2 on error.
+- **Encoded provincial taxes, visibly stamped** "Encoded
+  rates, checked 2026-11 — verify against CRA/provincial
+  sources before filing": QST 9.975% (QC), PST 7% (BC), PST 6%
+  (SK), RST 7% (MB). HST provinces (ON 13%, NS 14%, NB/NL/PE
+  15%) have no separate provincial component — the HST is one
+  combined tax, and none is invented for them.
+- **The provincial component is shown only as far as the data
+  supports it.** Quebec: recorded `qst` amounts appear as memo
+  totals (collected / paid / net), and QST is *estimated* at
+  9.975% on QC sales with no recorded QST amount (record
+  `qst: 0` to keep a zero-rated row out of the estimate).
+  BC/SK/MB: an exposure estimate only — rate × recorded sales
+  — labelled as such in text and JSON. No provincial ITC is
+  computed anywhere: PST/RST paid on inputs is generally a
+  cost, not a credit. QST still never enters the net.
+- **Rounding rule, stated and pinned by test:** each
+  province's figures are rounded to cents; the summary sums
+  the rounded per-province figures, so it always reconciles
+  with the province blocks.
+- **Missing or unknown province data fails cleanly** — a row
+  with no province (or an unknown code) is the same row-named
+  validation error as in v0.1.0; the view never guesses a
+  province or silently treats a row as GST-only.
+- New bundled sample: `examples/provinces-sample.json` + the
+  identical `.csv` — five provinces, four different tax
+  treatments, every figure hand-worked in the tests. The
+  original `examples/sample.*` is unchanged, and all v0.1.0
+  numbers, outputs and exit codes are unchanged (the report
+  banner now reads v0.2.0).
+- 18 new tests (77 total): every tax treatment to the cent,
+  per-province blocks on both samples, recorded-vs-estimate
+  QST, the rounding rule, period filtering, CSV/JSON
+  agreement, and the provinces CLI in text and JSON modes.
+
 ## v0.1.0 — 2026-11-04
 
 First release.

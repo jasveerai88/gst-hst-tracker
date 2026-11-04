@@ -7,7 +7,7 @@ registered for GST/HST — charging tax you never charged, on income
 you already spent. Most freelancers and sole proprietors discover
 the threshold *after* crossing it, because their "system" is a
 spreadsheet they update when they remember. `gst-hst-tracker`
-turns that spreadsheet into two answers you can trust:
+turns that spreadsheet into three answers you can trust:
 
 1. **`report`** — per calendar quarter: GST/HST collected on
    income, ITCs (the tax you paid on expenses), and the **net tax
@@ -18,6 +18,14 @@ turns that spreadsheet into two answers you can trust:
    your taxable income over the **last 4 calendar quarters**
    against the **$30,000** limit, with your exact headroom — or a
    clear alarm that you crossed it and registration is required.
+3. **`provinces`** *(new in v0.2.0)* — the same ledger grouped by
+   province instead of by quarter: which tax system applies in
+   each province you sell into (GST only, HST at that province's
+   rate, GST + QST, GST + PST/RST), the sales, GST/HST collected,
+   ITCs and net per province, plus recorded QST memo figures and
+   PST/RST exposure estimates — so a cross-Canada seller sees
+   their place-of-supply picture province by province instead of
+   one blended number.
 
 > **Disclaimer:** this tool is a tracking and calculation aid
 > only. It is **not tax advice** and it is **not a CRA filing**.
@@ -27,10 +35,10 @@ turns that spreadsheet into two answers you can trust:
 
 - Pure Python 3 standard library — no dependencies, no install step
 - Local only — your ledger never leaves your machine
-- Script-friendly exit codes: `report` exits `0` on success;
-  `threshold` exits `0` while you are a small supplier and `1`
-  when the threshold is crossed, so a script can catch the alarm;
-  `2` = error
+- Script-friendly exit codes: `report` and `provinces` exit `0`
+  on success; `threshold` exits `0` while you are a small
+  supplier and `1` when the threshold is crossed, so a script
+  can catch the alarm; `2` = error
 
 ## Province rates (as of 2026-11 — override any rate)
 
@@ -56,6 +64,42 @@ totals so you can see them — nothing more. The other provincial
 sales taxes (BC PST, SK PST, MB RST) are likewise out of scope:
 for those provinces the tool applies the 5% GST only.
 
+### The provincial component (the `provinces` view)
+
+The `provinces` command also shows each province's own sales
+tax — as far as a ledger can honestly support it. Encoded
+rates, checked 2026-11 — verify against CRA/provincial sources
+before filing:
+
+| Province | System | Provincial part |
+|---|---|---|
+| AB, NT, NU, YT | GST 5% | — |
+| ON | HST 13% | — (one combined tax) |
+| NS | HST 14% | — (one combined tax) |
+| NB, NL, PE | HST 15% | — (one combined tax) |
+| QC | GST 5% + QST | QST 9.975% — recorded amounts as memo, estimate on unrecorded sales |
+| BC | GST 5% + PST | PST 7% — estimate on sales |
+| SK | GST 5% + PST | PST 6% — estimate on sales |
+| MB | GST 5% + RST | RST 7% — estimate on sales |
+
+Three honesty rules govern this view:
+
+- **Quebec:** QST you recorded (the `qst` fields) is shown as
+  memo totals — collected, paid, net — exactly as in `report`.
+  On QC sales where you recorded *no* QST amount, the tool adds
+  a clearly-labelled **estimate** at 9.975%. Record `qst: 0` on
+  a zero-rated QC row to keep it out of the estimate.
+- **BC / Saskatchewan / Manitoba:** the figure is an **exposure
+  estimate** — the encoded rate × the province's recorded
+  sales. The ledger has no PST/RST field, so nothing is claimed
+  as "collected", and no provincial ITC is computed: PST/RST
+  paid on business inputs is generally a cost, not a credit.
+  (BC's 7% is the general PST rate; some categories differ.)
+- **Rounding:** each province's figures are rounded to cents,
+  and the all-provinces summary is the sum of those rounded
+  figures — the summary always reconciles exactly with the
+  province blocks above it.
+
 ## The model (the choices are deliberate — and stated)
 
 - **Net tax owing = GST/HST collected − ITCs**, per calendar
@@ -76,6 +120,14 @@ for those provinces the tool applies the 5% GST only.
   Expenses never reduce it. Exempt supplies (residential rent,
   most financial services) are not taxable supplies and should
   not be entered as income.
+- **The provincial view groups by the row's province** — your
+  recorded place of supply. Per-province net is the same federal
+  math as `report`, sliced by province; the totals reconcile
+  with the report's totals (945 collected / 79 ITCs / 866 net
+  on the bundled sample). The provincial component follows the
+  three honesty rules above: recorded QST as memo plus an
+  estimate on unrecorded QC sales, PST/RST as exposure
+  estimates, nothing invented for the HST provinces.
 - The T2125-style section is a **preparation aid**: gross
   business income and expenses grouped by the row's `category`
   (common categories are matched to T2125-style names like
@@ -116,14 +168,19 @@ python3 src/gst_hst_tracker.py report examples/sample.json --period 2026-Q1
 # 3. The small-supplier alarm (exit 1 if crossed)
 python3 src/gst_hst_tracker.py threshold examples/sample.json
 
-# 4. The same numbers as one JSON object (for scripts and agents)
+# 4. The provincial view (whole file, or one --period)
+python3 src/gst_hst_tracker.py provinces examples/sample.json
+python3 src/gst_hst_tracker.py provinces examples/provinces-sample.json
+
+# 5. The same numbers as one JSON object (for scripts and agents)
 python3 src/gst_hst_tracker.py report examples/sample.json --json
 python3 src/gst_hst_tracker.py threshold examples/sample.json --json
+python3 src/gst_hst_tracker.py provinces examples/sample.json --json
 
-# 5. Also print INR equivalents (rate per 1 CAD)
+# 6. Also print INR equivalents (rate per 1 CAD)
 python3 src/gst_hst_tracker.py report examples/sample.json --cad-to-inr 67.97
 
-# 6. Override a province rate when it changes
+# 7. Override a province rate when it changes
 python3 src/gst_hst_tracker.py report examples/sample.json --rate NS=15
 ```
 
@@ -136,12 +193,14 @@ numbers and exit codes as the text report (errors come back as
 ```bash
 python3 src/gst_hst_tracker.py report examples/sample.json --json
 python3 src/gst_hst_tracker.py threshold examples/sample.json --json
+python3 src/gst_hst_tracker.py provinces examples/sample.json --json
 ```
 
 Agents: read [SKILL.md](SKILL.md) first — commands, the full JSON
 schemas, exit codes, and the honesty rules (this is a tracking
 aid, never tax advice; the rates are Nov-2026 defaults, never
-quote them as live fact; exactly-at-threshold is not crossed).
+quote them as live fact; exactly-at-threshold is not crossed;
+provincial estimates are estimates, never recorded collections).
 
 ## Real runs (verbatim)
 
@@ -152,7 +211,7 @@ consulting invoice, and conference travel.
 
 ```text
 $ python3 src/gst_hst_tracker.py report examples/sample.json
-gst-hst-tracker v0.1.0 — report for sample.json (7 transaction(s))
+gst-hst-tracker v0.2.0 — report for sample.json (7 transaction(s))
 Tax rates: defaults as of 2026-11 — override any rate with --rate PROV=PCT (e.g. --rate NS=14).
 Amounts in CAD.
 
@@ -191,7 +250,7 @@ One quarter at a time, verbatim:
 
 ```text
 $ python3 src/gst_hst_tracker.py report examples/sample.json --period 2026-Q1
-gst-hst-tracker v0.1.0 — report for sample.json (5 transaction(s)) — period 2026-Q1
+gst-hst-tracker v0.2.0 — report for sample.json (5 transaction(s)) — period 2026-Q1
 Tax rates: defaults as of 2026-11 — override any rate with --rate PROV=PCT (e.g. --rate NS=14).
 Amounts in CAD.
 
@@ -211,7 +270,7 @@ And the alarm, on the same sample:
 
 ```text
 $ python3 src/gst_hst_tracker.py threshold examples/sample.json
-gst-hst-tracker v0.1.0 — small-supplier threshold for sample.json
+gst-hst-tracker v0.2.0 — small-supplier threshold for sample.json
 Rule (as of 2026-11): registration is required once taxable supplies EXCEED 30,000.00 over the last 4 calendar quarters. Exactly at the limit does not cross it.
 Window: the last 4 calendar quarters ending 2026-Q2 (the quarter of the latest transaction, 2026-05-01):
   2025-Q3: 0.00
@@ -230,7 +289,7 @@ Q1 and $10,001 of follow-on work in Q2:
 
 ```text
 $ python3 src/gst_hst_tracker.py threshold crossed.json
-gst-hst-tracker v0.1.0 — small-supplier threshold for crossed.json
+gst-hst-tracker v0.2.0 — small-supplier threshold for crossed.json
 Rule (as of 2026-11): registration is required once taxable supplies EXCEED 30,000.00 over the last 4 calendar quarters. Exactly at the limit does not cross it.
 Window: the last 4 calendar quarters ending 2026-Q2 (the quarter of the latest transaction, 2026-05-10):
   2025-Q3: 0.00
@@ -247,11 +306,107 @@ Disclaimer: This tool is a tracking and calculation aid only. It is not tax advi
 One dollar over is over. That is exactly the moment to learn it
 from a tool instead of from a CRA notice.
 
+The provincial view on the same sample — per-province nets
+reconcile with the report totals above (945 / 79 / 866), and
+BC's PST appears as a labelled estimate:
+
+```text
+$ python3 src/gst_hst_tracker.py provinces examples/sample.json
+gst-hst-tracker v0.2.0 — provinces for sample.json (7 transaction(s))
+Encoded rates, checked 2026-11 — verify against CRA/provincial sources before filing.
+Amounts in CAD.
+
+AB — GST 5%
+  Sales (pre-tax): 0.00 · Expenses (pre-tax): 800.00
+  GST/HST collected: 0.00 · ITCs: 40.00 · NET GST/HST: -40.00
+
+BC — GST 5% + PST 7%
+  Sales (pre-tax): 1,500.00 · Expenses (pre-tax): 0.00
+  GST/HST collected: 75.00 · ITCs: 0.00 · NET GST/HST: 75.00
+  PST estimated on these sales at 7%: 105.00 — an exposure estimate, not a recorded collection; PST/RST paid on inputs is generally a cost, not an ITC, so no provincial ITC is computed.
+
+NS — HST 14%
+  Sales (pre-tax): 2,500.00 · Expenses (pre-tax): 0.00
+  GST/HST collected: 350.00 · ITCs: 0.00 · NET GST/HST: 350.00
+
+ON — HST 13%
+  Sales (pre-tax): 5,000.00 · Expenses (pre-tax): 300.00
+  GST/HST collected: 520.00 · ITCs: 39.00 · NET GST/HST: 481.00
+
+ALL PROVINCES (4)
+  Sales (pre-tax): 9,000.00 · Expenses (pre-tax): 1,100.00
+  GST/HST collected: 945.00 · ITCs: 79.00 · NET GST/HST: 866.00
+  Provincial tax estimated on sales (QST unrecorded + PST/RST): 105.00
+
+Net = GST/HST collected − ITCs, per province. Each province's figures are rounded to cents; the all-provinces summary sums the rounded figures, so it always reconciles with the blocks above.
+Provincial components are exposure information, not amounts owing: recorded QST is a memo for Revenu Québec, and PST/RST figures are rate × sales estimates.
+Disclaimer: This tool is a tracking and calculation aid only. It is not tax advice and it is not a CRA filing. Verify your figures and obligations with the CRA or a qualified accountant before filing.
+(exit code: 0)
+```
+
+And on the dedicated provinces sample
+(`examples/provinces-sample.json`, with the identical
+`examples/provinces-sample.csv`) — five provinces, four
+different tax treatments, Quebec with QST recorded on some
+sales and estimated on the rest:
+
+```text
+$ python3 src/gst_hst_tracker.py provinces examples/provinces-sample.json
+gst-hst-tracker v0.2.0 — provinces for provinces-sample.json (10 transaction(s))
+Encoded rates, checked 2026-11 — verify against CRA/provincial sources before filing.
+Amounts in CAD.
+
+AB — GST 5%
+  Sales (pre-tax): 4,000.00 · Expenses (pre-tax): 1,000.00
+  GST/HST collected: 200.00 · ITCs: 50.00 · NET GST/HST: 150.00
+
+BC — GST 5% + PST 7%
+  Sales (pre-tax): 6,000.00 · Expenses (pre-tax): 500.00
+  GST/HST collected: 300.00 · ITCs: 25.00 · NET GST/HST: 275.00
+  PST estimated on these sales at 7%: 420.00 — an exposure estimate, not a recorded collection; PST/RST paid on inputs is generally a cost, not an ITC, so no provincial ITC is computed.
+
+ON — HST 13%
+  Sales (pre-tax): 10,000.00 · Expenses (pre-tax): 2,000.00
+  GST/HST collected: 1,300.00 · ITCs: 260.00 · NET GST/HST: 1,040.00
+
+QC — GST 5% + QST 9.975%
+  Sales (pre-tax): 10,000.00 · Expenses (pre-tax): 1,000.00
+  GST/HST collected: 500.00 · ITCs: 50.00 · NET GST/HST: 450.00
+  QST (memo only, NOT in the net): recorded collected 798.00 · recorded paid 99.75 · recorded net 698.25
+  QST estimated on sales with no recorded QST amount (2,000.00 of sales): 199.50
+
+SK — GST 5% + PST 6%
+  Sales (pre-tax): 3,000.00 · Expenses (pre-tax): 0.00
+  GST/HST collected: 150.00 · ITCs: 0.00 · NET GST/HST: 150.00
+  PST estimated on these sales at 6%: 180.00 — an exposure estimate, not a recorded collection; PST/RST paid on inputs is generally a cost, not an ITC, so no provincial ITC is computed.
+
+ALL PROVINCES (5)
+  Sales (pre-tax): 33,000.00 · Expenses (pre-tax): 4,500.00
+  GST/HST collected: 2,450.00 · ITCs: 385.00 · NET GST/HST: 2,065.00
+  QST recorded (memo only): collected 798.00 · paid 99.75 · net 698.25
+  Provincial tax estimated on sales (QST unrecorded + PST/RST): 799.50
+
+Net = GST/HST collected − ITCs, per province. Each province's figures are rounded to cents; the all-provinces summary sums the rounded figures, so it always reconciles with the blocks above.
+Provincial components are exposure information, not amounts owing: recorded QST is a memo for Revenu Québec, and PST/RST figures are rate × sales estimates.
+Disclaimer: This tool is a tracking and calculation aid only. It is not tax advice and it is not a CRA filing. Verify your figures and obligations with the CRA or a qualified accountant before filing.
+(exit code: 0)
+```
+
+Every number there is checkable by hand: Ontario is 13% of
+10,000 = **1,300** collected and 13% of 2,000 = **260** of
+ITCs; Quebec's recorded QST is **798.00** (9.975% of the 8,000
+sale it was supplied on), its estimate is 9.975% of the 2,000
+sale with no QST recorded = **199.50**; BC's PST estimate is
+7% of 6,000 = **420**; Saskatchewan's is 6% of 3,000 =
+**180**. The summary's estimates line is the sum of the
+rounded per-province estimates: 199.50 + 420 + 180 =
+**799.50**.
+
 ## Tests
 
 ```bash
 python3 -m unittest discover -s tests -v
-# Ran 59 tests — OK
+# Ran 77 tests — OK
 ```
 
 The suite covers both directions: the sample's net-tax figures
@@ -263,6 +418,13 @@ rejected on non-Quebec rows), quarter bucketing at year edges,
 malformed rows failing with their row numbers in text and JSON
 modes, `--rate` overrides changing results by exactly the
 hand-computed delta, and CSV/JSON agreement on the same data.
+v0.2.0 adds the provincial view: every tax treatment computed to
+the cent, per-province blocks on both samples worked by hand,
+recorded QST replacing the estimate (and a recorded `qst: 0`
+staying out of it), the rounding rule pinned by a case where
+per-province-then-summed and summed-then-rounded differ by a
+cent, period filtering, and missing/unknown province rows
+failing cleanly with the row named.
 
 ## Internal use
 
@@ -284,8 +446,11 @@ quarter instead of discovered at tax time.
   transaction.** If your ledger is months stale, the window is
   too. Keep the ledger current; the tool can only test the data
   it is given.
-- **Quebec is memo-only** (see the boundary above), and the other
-  provincial sales taxes (PST/RST) are out of scope entirely.
+- **Quebec's QST is memo-only in the net** (see the boundary
+  above) — recorded amounts plus a labelled estimate in the
+  `provinces` view — and the other provincial sales taxes
+  (PST/RST) appear only as exposure estimates in that view,
+  never as taxes owed.
 - **One currency: CAD.** The INR figures from `--cad-to-inr` are
   display equivalents only; they do not convert the books.
 - Penalties and interest are **never** computed — if you crossed
