@@ -1,0 +1,8 @@
+date,kind,description,amount,province,tax,category
+2026-01-15,income,Website build — Client A,4000.00,ON,,
+2026-02-10,income,Logo package — Client B,1500.00,BC,,
+2026-02-14,income,Zero-rated export work — Client D,1000.00,ON,0,
+2026-01-20,expense,Laptop for client work,200.00,ON,26.00,Office expenses
+2026-03-05,expense,Web hosting,100.00,ON,,Office expenses
+2026-04-12,income,Consulting — Client C,2500.00,NS,,
+2026-05-01,expense,Conference travel,800.00,AB,40.00,Travel
