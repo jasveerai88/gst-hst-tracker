@@ -27,8 +27,8 @@ It is a **tracker, not a tax advisor**. It computes from your figures and encode
 ## Quick start
 
 ```bash
-pipx install git+https://github.com/jasveerai88/gst-hst-tracker
-# or: pip install git+https://github.com/jasveerai88/gst-hst-tracker
+pipx install gst-hst-tracker
+# or: pip install gst-hst-tracker
 
 # from a clone, so the bundled examples are on disk:
 gst-hst-tracker threshold examples/sample.json
