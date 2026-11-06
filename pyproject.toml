@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Track GST/HST for Canadian freelancers and sole proprietors: per-quarter collected, ITCs and net owing, the $30,000 small-supplier alarm, and a per-province exposure view. A tracking aid — not tax advice."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Jasveer Singh" },
 ]
@@ -26,7 +26,6 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Financial and Insurance Industry",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -41,6 +40,7 @@ dependencies = []
 Homepage = "https://github.com/jasveerai88/gst-hst-tracker"
 Repository = "https://github.com/jasveerai88/gst-hst-tracker"
 Issues = "https://github.com/jasveerai88/gst-hst-tracker/issues"
+Changelog = "https://github.com/jasveerai88/gst-hst-tracker/blob/main/CHANGELOG.md"
 
 [project.scripts]
 gst-hst-tracker = "gst_hst_tracker:main"
